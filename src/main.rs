@@ -1,9 +1,9 @@
 pub mod models;
 pub mod utils;
 
-use models::torrent::Torrent;
+use models::torrent::{Info, Torrent};
+use sha1::{Digest, Sha1};
 use std::{env, panic};
-
 use utils::bencode::decode_bencoded_value;
 use utils::torrent::{parse_torrent_file, read_byte_file};
 
@@ -23,8 +23,7 @@ fn main() {
             Err(error) => panic!("Could not read file '{torrent_file_name}'. Error: {error}"),
         };
 
-        println!("{:?}", data);
-        let parsed_torrent_file: Torrent = match parse_torrent_file(&data) {
+        let torrent_file: Torrent = match parse_torrent_file(&data) {
             Ok(data) => data,
             Err(err) => panic!(
                 "Could not parse torrent file ({}). Error: {}",
@@ -32,7 +31,19 @@ fn main() {
             ),
         };
 
-        println!("{:?}", parsed_torrent_file);
+        let info: Info = torrent_file.info;
+        let info_bencoded = match serde_bencode::to_bytes(&info) {
+            Ok(data) => data,
+            Err(err) => panic!("Error while parsing info field to bencode! {}", err),
+        };
+
+        let mut hasher = Sha1::new();
+        hasher.update(info_bencoded);
+        let info_sha1_hex = hex::encode(hasher.finalize());
+
+        println!("Tracker URL: {}", torrent_file.announce.unwrap());
+        println!("Length: {}", info.length.unwrap());
+        println!("{}", info_sha1_hex);
     } else {
         println!("unknown command: {}", args[1])
     }

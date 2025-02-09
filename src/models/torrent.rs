@@ -1,11 +1,11 @@
 use serde_bytes::ByteBuf;
 
-use serde_derive::Deserialize;
+use serde_derive::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Node(String, i64);
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct File {
     pub path: Vec<String>,
     pub length: i64,
@@ -14,7 +14,7 @@ pub struct File {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Info {
     pub name: String,
     pub pieces: ByteBuf,
@@ -35,7 +35,7 @@ pub struct Info {
     pub root_hash: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Torrent {
     pub info: Info,
     #[serde(default)]
