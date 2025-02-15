@@ -44,6 +44,13 @@ fn main() {
         println!("Tracker URL: {}", torrent_file.announce.unwrap());
         println!("Length: {}", info.length.unwrap());
         println!("{}", info_sha1_hex);
+        println!("Piece length: {}", info.piece_length);
+
+        println!("Piece Hashes:");
+        let piece_iter = info.pieces.chunks_exact(20);
+        for piece in piece_iter {
+            println!("{}", hex::encode(piece));
+        }
     } else {
         println!("unknown command: {}", args[1])
     }
