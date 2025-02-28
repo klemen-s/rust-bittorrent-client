@@ -1,5 +1,4 @@
 use serde_bytes::ByteBuf;
-
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -1,7 +1,10 @@
+use serde_derive::{Deserialize, Serialize};
 use std::fmt::Write;
+use std::net::Ipv4Addr;
 use url::Url;
 use url_builder::URLBuilder;
 
+#[derive(Debug)]
 pub struct TrackerRequest {
     pub tracker_url: String,
     pub info_hash: [u8; 20],
@@ -52,7 +55,6 @@ impl TrackerRequest {
 
     pub fn url_encode(&self) -> String {
         let mut ub = URLBuilder::new();
-        println!("{}", self.tracker_url);
         let (protocol, host, path) = self.parse_url();
         let url_encoded_info_hash = self.url_encode_info_hash();
 
@@ -67,4 +69,16 @@ impl TrackerRequest {
             .add_param("compact", &self.compact.to_string());
         ub.build()
     }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct TrackerResponse {
+    pub interval: i64,
+    pub peers: Option<Vec<Peer>>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Peer {
+    pub host: Ipv4Addr,
+    pub port: u16,
 }

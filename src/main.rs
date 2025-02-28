@@ -2,12 +2,15 @@ pub mod models;
 pub mod utils;
 
 use models::torrent::{Info, Torrent};
-use models::tracker::TrackerRequest;
+use models::tracker::{TrackerRequest, TrackerResponse};
+
+use serde_bencode::value::Value;
 use sha1::{Digest, Sha1};
+use std::collections::HashMap;
 use std::io::Read;
 use std::{env, panic};
 use utils::bencode::decode_bencoded_value;
-use utils::torrent::{generate_peer_id, parse_torrent_file, read_byte_file};
+use utils::torrent::{generate_peer_id, parse_peers, parse_torrent_file, read_byte_file};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -80,7 +83,6 @@ fn main() {
         let info_hash: [u8; 20] = hasher.finalize().into();
 
         let peer_id: String = generate_peer_id();
-
         let tracker_req: TrackerRequest = TrackerRequest::new(
             torrent_file.announce.unwrap(),
             info_hash,
@@ -88,11 +90,33 @@ fn main() {
             info.length.unwrap(),
         );
         let tracker_request = tracker_req.url_encode();
-        println!("URL encoded tracker request: {tracker_request}");
 
-        let res =
-            reqwest::blocking::get(tracker_request).expect("No response from tracker server...");
-        println!("Response: {:?}", res);
+        let mut res =
+            reqwest::blocking::get(&tracker_request).expect("No response from tracker server...");
+        println!("Sending request to tracker...");
+
+        let mut buffer: Vec<u8> = Vec::new();
+        res.read_to_end(&mut buffer)
+            .expect("Unable to read response to buffer......");
+
+        println!("Got tracker response!");
+        let decoded: HashMap<String, Value> = match serde_bencode::from_bytes(&buffer) {
+            Ok(val) => val,
+            Err(_) => panic!("Could not decode tracker response"),
+        };
+
+        let peers = match decoded.get("peers") {
+            Some(Value::Bytes(peers)) => Some(parse_peers(peers)),
+            None => None,
+            _ => None,
+        };
+        let interval = match decoded.get("interval") {
+            Some(Value::Int(interval)) => *interval,
+            None => 0,
+            _ => 0,
+        };
+        let tracker_response = TrackerResponse { interval, peers };
+        println!("Tracker response: {:?}", tracker_response);
     } else {
         println!("unknown command: {}", args[1])
     }
