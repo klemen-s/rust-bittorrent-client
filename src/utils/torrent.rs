@@ -1,9 +1,9 @@
 use crate::models::{torrent::Torrent, tracker::Peer};
 
-use rand::distr::Alphanumeric;
-use rand::Rng;
 use std::net::Ipv4Addr;
 use std::{fs, io};
+
+use sha1::{Digest, Sha1};
 
 pub fn read_byte_file(file_name: &String) -> io::Result<Vec<u8>> {
     let data: Vec<u8> = fs::read(file_name)?;
@@ -15,14 +15,20 @@ pub fn parse_torrent_file(data: &[u8]) -> Result<Torrent, serde_bencode::Error> 
     Ok(torrent_file)
 }
 
-pub fn generate_peer_id() -> String {
-    let mut rng = rand::rng();
-    let peer_id: String = std::iter::repeat(())
-        .map(|()| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(20)
-        .collect();
-    println!("Generated peer id: {peer_id}");
+pub fn sha1_hex(data: Vec<u8>) -> String {
+    let mut hasher = Sha1::new();
+    hasher.update(data);
+    hex::encode(hasher.finalize())
+}
+
+pub fn sha1_bytes(data: Vec<u8>) -> [u8; 20] {
+    let mut hasher = Sha1::new();
+    hasher.update(data);
+    hasher.finalize().into()
+}
+pub fn generate_peer_id() -> [u8; 20] {
+    let peer_id: [u8; 20] = *b"KS001122334455667788";
+    println!("Generated peer id: KS0011223344556677");
 
     peer_id
 }

@@ -1,16 +1,23 @@
 pub mod models;
+pub mod protocols;
 pub mod utils;
 
+use crate::protocols::peer;
+use models::peer::PeerResponse;
 use models::torrent::{Info, Torrent};
-use models::tracker::{TrackerRequest, TrackerResponse};
+use models::tracker::{Peer, TrackerRequest};
 
+use reqwest::blocking::Response;
 use serde_bencode::value::Value;
-use sha1::{Digest, Sha1};
 use std::collections::HashMap;
+use std::io::prelude::*;
 use std::io::Read;
+use std::net::TcpStream;
 use std::{env, panic};
 use utils::bencode::decode_bencoded_value;
-use utils::torrent::{generate_peer_id, parse_peers, parse_torrent_file, read_byte_file};
+use utils::torrent::{
+    generate_peer_id, parse_peers, parse_torrent_file, read_byte_file, sha1_bytes, sha1_hex,
+};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -42,9 +49,7 @@ fn main() {
             Err(err) => panic!("Error while parsing info field to bencode! {}", err),
         };
 
-        let mut hasher = Sha1::new();
-        hasher.update(info_bencoded);
-        let info_sha1_hex = hex::encode(hasher.finalize());
+        let info_sha1_hex = sha1_hex(info_bencoded);
 
         println!("Tracker URL: {}", torrent_file.announce.unwrap());
         println!("Length: {}", info.length.unwrap());
@@ -71,6 +76,7 @@ fn main() {
                 torrent_file_name, err
             ),
         };
+        println!("Successfully parsed torrent file!");
 
         let info: Info = torrent_file.info;
         let info_bencoded = match serde_bencode::to_bytes(&info) {
@@ -78,20 +84,17 @@ fn main() {
             Err(err) => panic!("Error while parsing info field to bencode! {}", err),
         };
 
-        let mut hasher = Sha1::new();
-        hasher.update(info_bencoded);
-        let info_hash: [u8; 20] = hasher.finalize().into();
-
-        let peer_id: String = generate_peer_id();
+        let info_hash: [u8; 20] = sha1_bytes(info_bencoded);
+        let peer_id: [u8; 20] = generate_peer_id();
         let tracker_req: TrackerRequest = TrackerRequest::new(
             torrent_file.announce.unwrap(),
             info_hash,
             peer_id,
             info.length.unwrap(),
         );
-        let tracker_request = tracker_req.url_encode();
+        let tracker_request: String = tracker_req.url_encode();
 
-        let mut res =
+        let mut res: Response =
             reqwest::blocking::get(&tracker_request).expect("No response from tracker server...");
         println!("Sending request to tracker...");
 
@@ -105,18 +108,44 @@ fn main() {
             Err(_) => panic!("Could not decode tracker response"),
         };
 
-        let peers = match decoded.get("peers") {
+        let peers: Vec<Peer> = match decoded.get("peers") {
             Some(Value::Bytes(peers)) => Some(parse_peers(peers)),
             None => None,
             _ => None,
-        };
-        let interval = match decoded.get("interval") {
-            Some(Value::Int(interval)) => *interval,
-            None => 0,
-            _ => 0,
-        };
-        let tracker_response = TrackerResponse { interval, peers };
-        println!("Tracker response: {:?}", tracker_response);
+        }
+        .expect("Should have peers...");
+
+        // CURRENTLY UNUSED
+        //        let interval: i64 = match decoded.get("interval") {
+        //            Some(Value::Int(interval)) => *interval,
+        //            None => 0,
+        //            _ => 0,
+        //        };
+        //        let tracker_response: TrackerResponse = TrackerResponse { interval, peers };
+        //       println!("{:?}", tracker_response);
+
+        let rnd_peer = peers.first().expect("Expected a peer...");
+        let handshake_bytes = peer::init_handshake(info_hash, peer_id);
+        let mut peer_res = [0u8; 68];
+
+        println!("Connecting to peer over TCP...");
+        let mut stream = TcpStream::connect(format!("{rnd_peer}"))
+            .expect("Wanted to connect to peer but could not...");
+
+        stream
+            .write_all(&handshake_bytes)
+            .expect("Should be able to write to TCP connection");
+        println!("Reading data from TCP stream...");
+        stream
+            .read_exact(&mut peer_res)
+            .expect("Should be able to read trom TCP connection");
+
+        // Parse peer response
+        let peer_res: PeerResponse = peer::parse_peer_response(peer_res);
+        println!(
+            "Peer response -> Peer ID: {:?}",
+            hex::encode(peer_res.peer_id)
+        );
     } else {
         println!("unknown command: {}", args[1])
     }

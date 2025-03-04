@@ -895,6 +895,7 @@ dependencies = [
 name = "rust-bittorrent-client"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "hex",
  "rand",
  "reqwest",

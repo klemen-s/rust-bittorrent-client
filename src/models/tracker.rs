@@ -1,4 +1,5 @@
 use serde_derive::{Deserialize, Serialize};
+use std::fmt;
 use std::fmt::Write;
 use std::net::Ipv4Addr;
 use url::Url;
@@ -8,7 +9,7 @@ use url_builder::URLBuilder;
 pub struct TrackerRequest {
     pub tracker_url: String,
     pub info_hash: [u8; 20],
-    pub peer_id: String,
+    pub peer_id: [u8; 20],
     pub port: u16,
     pub uploaded: u32,
     pub downloaded: u32,
@@ -20,7 +21,7 @@ impl TrackerRequest {
     pub fn new(
         tracker_url: String,
         info_hash: [u8; 20],
-        peer_id: String,
+        peer_id: [u8; 20],
         left: i64,
     ) -> TrackerRequest {
         TrackerRequest {
@@ -61,7 +62,7 @@ impl TrackerRequest {
         ub.set_protocol(&protocol);
         ub.set_host(format!("{host}/{path}").as_str());
         ub.add_param("info_hash", url_encoded_info_hash.as_str())
-            .add_param("peer_id", &self.peer_id)
+            .add_param("peer_id", &String::from_utf8_lossy(&self.peer_id))
             .add_param("port", &self.port.to_string())
             .add_param("uploaded", &self.uploaded.to_string())
             .add_param("downloaded", &self.downloaded.to_string())
@@ -74,11 +75,17 @@ impl TrackerRequest {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TrackerResponse {
     pub interval: i64,
-    pub peers: Option<Vec<Peer>>,
+    pub peers: Vec<Peer>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Peer {
     pub host: Ipv4Addr,
     pub port: u16,
+}
+
+impl fmt::Display for Peer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.host, self.port)
+    }
 }
