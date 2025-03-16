@@ -18,11 +18,11 @@ pub struct Info {
     pub name: String,
     pub pieces: ByteBuf,
     #[serde(rename = "piece length")]
-    pub piece_length: i64,
+    pub piece_length: u32,
     #[serde(default)]
     pub md5sum: Option<String>,
     #[serde(default)]
-    pub length: Option<i64>,
+    pub length: u32,
     #[serde(default)]
     pub files: Option<Vec<File>>,
     #[serde(default)]

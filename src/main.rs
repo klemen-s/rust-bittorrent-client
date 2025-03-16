@@ -3,13 +3,14 @@ pub mod protocols;
 pub mod utils;
 
 use crate::protocols::peer;
-use models::peer::PeerResponse;
 use models::torrent::{Info, Torrent};
 use models::tracker::{Peer, TrackerRequest};
 
+use protocols::peer::{read_peer_message, send_peer_message};
 use reqwest::blocking::Response;
 use serde_bencode::value::Value;
 use std::collections::HashMap;
+use std::fs::File;
 use std::io::prelude::*;
 use std::io::Read;
 use std::net::TcpStream;
@@ -52,7 +53,7 @@ fn main() {
         let info_sha1_hex = sha1_hex(info_bencoded);
 
         println!("Tracker URL: {}", torrent_file.announce.unwrap());
-        println!("Length: {}", info.length.unwrap());
+        println!("Length: {}", info.length);
         println!("{}", info_sha1_hex);
         println!("Piece length: {}", info.piece_length);
 
@@ -61,7 +62,7 @@ fn main() {
         for piece in piece_iter {
             println!("{}", hex::encode(piece));
         }
-    } else if command == "peers" {
+    } else if command == "download" {
         let torrent_file_name: &String = &args[2];
 
         let data = match read_byte_file(torrent_file_name) {
@@ -90,7 +91,7 @@ fn main() {
             torrent_file.announce.unwrap(),
             info_hash,
             peer_id,
-            info.length.unwrap(),
+            info.length,
         );
         let tracker_request: String = tracker_req.url_encode();
 
@@ -115,21 +116,12 @@ fn main() {
         }
         .expect("Should have peers...");
 
-        // CURRENTLY UNUSED
-        //        let interval: i64 = match decoded.get("interval") {
-        //            Some(Value::Int(interval)) => *interval,
-        //            None => 0,
-        //            _ => 0,
-        //        };
-        //        let tracker_response: TrackerResponse = TrackerResponse { interval, peers };
-        //       println!("{:?}", tracker_response);
-
-        let rnd_peer = peers.first().expect("Expected a peer...");
+        let peer = peers.first().expect("Expected a peer...");
         let handshake_bytes = peer::init_handshake(info_hash, peer_id);
         let mut peer_res = [0u8; 68];
 
-        println!("Connecting to peer over TCP...");
-        let mut stream = TcpStream::connect(format!("{rnd_peer}"))
+        println!("Connecting to peer {:?} over TCP...", format!("{peer}"));
+        let mut stream = TcpStream::connect(format!("{peer}"))
             .expect("Wanted to connect to peer but could not...");
 
         stream
@@ -140,12 +132,35 @@ fn main() {
             .read_exact(&mut peer_res)
             .expect("Should be able to read trom TCP connection");
 
+        // Creata file for torrent data
+        File::create("data.txt").expect("creation failed");
+
         // Parse peer response
-        let peer_res: PeerResponse = peer::parse_peer_response(peer_res);
-        println!(
-            "Peer response -> Peer ID: {:?}",
-            hex::encode(peer_res.peer_id)
-        );
+        let peer_id: [u8; 20] = peer_res[48..68].try_into().expect("");
+        println!("Peer response -> Peer ID: {:?}", hex::encode(peer_id));
+
+        let bitfield = read_peer_message(&mut stream).payload.unwrap()[0] as u32;
+        send_peer_message(&mut stream, 1, 0, 0);
+
+        let mut available_pieces = Vec::new();
+        for i in 0..8 {
+            if (bitfield & (1 << (7 - i))) != 0 {
+                available_pieces.push(i);
+            }
+        }
+
+        let last_piece_length = if info.length % info.piece_length > 0 {
+            info.length % info.piece_length
+        } else {
+            info.piece_length
+        };
+        for (index, piece_index) in available_pieces.iter().enumerate() {
+            if index == available_pieces.len() - 1 {
+                send_peer_message(&mut stream, 6, last_piece_length, *piece_index);
+            } else {
+                send_peer_message(&mut stream, 6, info.piece_length, *piece_index);
+            }
+        }
     } else {
         println!("unknown command: {}", args[1])
     }

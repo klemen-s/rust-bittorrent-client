@@ -13,7 +13,7 @@ pub struct TrackerRequest {
     pub port: u16,
     pub uploaded: u32,
     pub downloaded: u32,
-    pub left: i64,
+    pub left: u32,
     pub compact: u8,
 }
 
@@ -22,7 +22,7 @@ impl TrackerRequest {
         tracker_url: String,
         info_hash: [u8; 20],
         peer_id: [u8; 20],
-        left: i64,
+        left: u32,
     ) -> TrackerRequest {
         TrackerRequest {
             tracker_url,
